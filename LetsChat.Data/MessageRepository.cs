@@ -20,7 +20,8 @@ namespace LetsChat.Data
     public class MessageRepository : IMessageRepository
     {
         private const string sbConnectString = "ServiceBusConnectionString";
-        private readonly IQueueClient queueClient;
+        private readonly ITopicClient publisher;
+        private readonly ISubscriptionClient subscriber;
         private readonly IHubContext<ChatHub> _hubContext;
 
         public MessageRepository(IConfiguration config, IHubContext<ChatHub> hubContext)
@@ -28,7 +29,9 @@ namespace LetsChat.Data
             _hubContext = hubContext;
 
             var connectionString = config[sbConnectString];
-            queueClient = new QueueClient(connectionString, "letschat", ReceiveMode.PeekLock, RetryPolicy.Default);
+            publisher = new TopicClient(connectionString, config["ServiceBusTopic"], RetryPolicy.Default);
+            subscriber = new SubscriptionClient(connectionString, config["ServiceBusTopic"], 
+                config["ServiceBusSubscription"], ReceiveMode.PeekLock,RetryPolicy.Default);
 
             // Configure message handler options 
             var messageHandlerOptions = new MessageHandlerOptions(ExceptionReceivedHandler)
@@ -38,7 +41,7 @@ namespace LetsChat.Data
             };
 
             // Register function to processes messages.
-            queueClient.RegisterMessageHandler(SendMessageToClients, messageHandlerOptions);
+            subscriber.RegisterMessageHandler(SendMessageToClients, messageHandlerOptions);
         }
 
         /// <summary>
@@ -60,7 +63,7 @@ namespace LetsChat.Data
                 var message = new Message(Encoding.UTF8.GetBytes(json));
 
                 // And send the message to the queue.
-                await queueClient.SendAsync(message);
+                await publisher.SendAsync(message);
             }
             catch (Exception exception)
             {
@@ -92,7 +95,7 @@ namespace LetsChat.Data
                 await _hubContext.Clients.Group(msg.ChatRoom)?.SendAsync("ReceiveMessage", msg);
 
                 // Mark the message complete
-                await queueClient.CompleteAsync(message.SystemProperties.LockToken);
+                await subscriber.CompleteAsync(message.SystemProperties.LockToken);
             }
             catch (Exception ex)
             {
