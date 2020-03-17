@@ -3,6 +3,7 @@ using LetsChat.Services.DataAccess;
 using LetsChat.Services.Hubs;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.Azure.ServiceBus;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -25,7 +26,9 @@ namespace LetsChat
             services.AddRazorPages();
             services.AddSignalR();
             services.AddTransient<IMessageRepository, MessageRepository>();
-        }
+            services.AddTransient<ITopicClient, Publisher>();
+            services.AddTransient<ISubscriptionClient, Subscriber>();
+        }                         
 
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {

@@ -19,19 +19,18 @@ namespace LetsChat.Data
     /// </summary>
     public class MessageRepository : IMessageRepository
     {
-        private const string sbConnectString = "ServiceBusConnectionString";
-        private readonly ITopicClient publisher;
-        private readonly ISubscriptionClient subscriber;
+        public const string SBConnectionString = "ServiceBusConnectionString";
+        public const string TopicKey = "ServiceBusTopic";
+
+        private readonly ITopicClient _publisher;
+        private readonly ISubscriptionClient _subscriber;
         private readonly IHubContext<ChatHub> _hubContext;
 
-        public MessageRepository(IConfiguration config, IHubContext<ChatHub> hubContext)
+        public MessageRepository(IHubContext<ChatHub> hubContext, ISubscriptionClient subscriber, ITopicClient publisher)
         {
             _hubContext = hubContext;
-
-            var connectionString = config[sbConnectString];
-            publisher = new TopicClient(connectionString, config["ServiceBusTopic"], RetryPolicy.Default);
-            subscriber = new SubscriptionClient(connectionString, config["ServiceBusTopic"], 
-                config["ServiceBusSubscription"], ReceiveMode.PeekLock,RetryPolicy.Default);
+            _publisher = publisher;
+            _subscriber = subscriber;
 
             // Configure message handler options 
             var messageHandlerOptions = new MessageHandlerOptions(ExceptionReceivedHandler)
@@ -63,7 +62,7 @@ namespace LetsChat.Data
                 var message = new Message(Encoding.UTF8.GetBytes(json));
 
                 // And send the message to the queue.
-                await publisher.SendAsync(message);
+                await _publisher.SendAsync(message);
             }
             catch (Exception exception)
             {
@@ -95,7 +94,7 @@ namespace LetsChat.Data
                 await _hubContext.Clients.Group(msg.ChatRoom)?.SendAsync("ReceiveMessage", msg);
 
                 // Mark the message complete
-                await subscriber.CompleteAsync(message.SystemProperties.LockToken);
+                await _subscriber.CompleteAsync(message.SystemProperties.LockToken);
             }
             catch (Exception ex)
             {
